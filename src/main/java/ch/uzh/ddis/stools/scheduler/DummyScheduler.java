@@ -38,6 +38,9 @@ public class DummyScheduler implements IScheduler {
     @Override
     public void schedule(Topologies topologies, Cluster cluster) {
         LOG.trace("scheduling topologies...");
+
+
+
         this.evenScheduler.schedule(topologies, cluster);
     }
 }

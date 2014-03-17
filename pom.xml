@@ -10,7 +10,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<storm.version>0.9.1-incubating</storm.version>
+		<storm.version>0.9.1-lorenz-SNAPSHOT</storm.version>
 	</properties>
 
 	<scm>
@@ -36,12 +36,26 @@
 		</repository>
 	</distributionManagement>
 
+    <profiles>
+        <profile>
+            <!-- profile used to build the one-jar -->
+            <id>build</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.storm</groupId>
+                    <artifactId>storm-core</artifactId>
+                    <version>${storm.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.storm</groupId>
 			<artifactId>storm-core</artifactId>
 			<version>${storm.version}</version>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
