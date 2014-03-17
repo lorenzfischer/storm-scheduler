@@ -13,7 +13,7 @@
     </root>
 
     <logger name="ch.uzh.ddis" level="trace"/>
-    <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook" level="trace"/>
-    <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsToZookeeperWriter" level="trace"/>
+    <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook" level="debug"/>
+    <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsToZookeeperWriter" level="debug"/>
 
 </configuration>

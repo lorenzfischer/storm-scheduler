@@ -9,6 +9,7 @@ import backtype.storm.utils.Utils;
 import com.netflix.curator.framework.CuratorFramework;
 import com.netflix.curator.framework.api.BackgroundCallback;
 import com.netflix.curator.framework.api.CuratorEvent;
+import com.netflix.curator.framework.api.CuratorEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +65,7 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
      * update cycle". This can be overridden by configuring
      * {@see SchedulingMetricsToZookeeperWriter#CONF_SCHEDULING_METRIC_TIMEOUT_SECS}.
      */
-    public static final int DEFAULT_SCHEDULING_METRIC_TIMEOUT_SECS = 10;
+    public static final int DEFAULT_SCHEDULING_METRIC_TIMEOUT_SECS = 5;
 
     /**
      * If a name with this property is configured in the storm configuration map, its value will
@@ -165,18 +166,21 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
             this.updateTimeoutSecs = Utils.getInt(stormConf.get(CONF_SCHEDULING_METRIC_TIMEOUT_SECS));
         }
 
+        this.writerTaskExecutor = new ScheduledThreadPoolExecutor(1);
         this.dateUpdateTask = new Runnable() {
             @Override
             public void run() {
                 byte[] lastUpdateAsByteArray = null;
-                LOG.trace("Updating date of last update in ZK to {}", new Date(lastMetricUpdate.get()));
+
+                LOG.debug("Updating date of last update in ZK to {} for path {}",
+                        new Date(lastMetricUpdate.get()), zookeeperRootPath);
 
                 lastUpdateAsByteArray = ByteBuffer.allocate(8).putLong(lastMetricUpdate.get()).array();
 
                 try {
                     zkClient.setData().forPath(zookeeperRootPath, lastUpdateAsByteArray);
                 } catch (Exception e) {
-                    String errorMsg = "Couldn't write update timetamp into Zookeeper";
+                    String errorMsg = "Couldn't write update time tamp into Zookeeper";
                     LOG.error(errorMsg);
                 }
 
@@ -204,19 +208,24 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
                         zkClient.checkExists().inBackground(new BackgroundCallback() {
                             @Override
                             public void processResult(CuratorFramework client, CuratorEvent event) throws Exception {
-                                zkClient.setData().forPath(path, count);
-                                lastMetricUpdate.set(System.currentTimeMillis());
+                                if (event.getType() == CuratorEventType.EXISTS && event.getStat() == null) {
+                                    // stat is null if the node does not exist
+                                    zkClient.create().forPath(path, count);
+                                } else {
+                                    zkClient.setData().forPath(path, count);
+                                }
 
+                                lastMetricUpdate.set(System.currentTimeMillis());
                                 // Reset the current timeout counter and re-schedule the date updater task.
-                                if (taskFuture == null || taskFuture.cancel(false)) {
+                                if (taskFuture == null || taskFuture.cancel(false) || taskFuture.isDone()) {
                                     taskFuture = writerTaskExecutor.schedule(dateUpdateTask, updateTimeoutSecs,
                                             TimeUnit.SECONDS);
                                 } else {
                                     LOG.warn("Could not (re-) schedule the date update task.");
                                 }
+
                             }
                         }).forPath(path);
-
                     } catch (Exception e) {
                         LOG.error("Could not write send graph to zookeeper", e);
                     }
