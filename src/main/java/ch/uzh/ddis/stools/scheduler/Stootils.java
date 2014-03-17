@@ -4,6 +4,8 @@ package ch.uzh.ddis.stools.scheduler;
 import backtype.storm.Config;
 import backtype.storm.utils.ZookeeperAuthInfo;
 import com.netflix.curator.framework.CuratorFramework;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -12,6 +14,8 @@ import java.util.Map;
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
 public class Stootils {
+
+    private final static Logger LOG = LoggerFactory.getLogger(Stootils.class);
 
     private static CuratorFramework zkClientSingleton;
 
@@ -27,6 +31,7 @@ public class Stootils {
      */
     public static synchronized CuratorFramework getConfiguredZkClient(Map stormConf) {
         if (zkClientSingleton == null) {
+            LOG.debug("Creating CuratorFramework client for ZK server at {}:{}", stormConf.get(Config.STORM_ZOOKEEPER_SERVERS), stormConf.get(Config.STORM_ZOOKEEPER_PORT));
             zkClientSingleton = backtype.storm.utils.Utils.newCurator(stormConf,
                     (List<String>) stormConf.get(Config.STORM_ZOOKEEPER_SERVERS),
                     stormConf.get(Config.STORM_ZOOKEEPER_PORT),
