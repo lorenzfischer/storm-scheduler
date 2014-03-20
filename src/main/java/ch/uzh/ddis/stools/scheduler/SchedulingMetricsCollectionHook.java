@@ -85,34 +85,38 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
 
     @Override
     public void prepare(Map conf, final TopologyContext context) {
-        int intervalSecs;
+        if (context.getThisTaskId() < 0) {
+            LOG.debug("Skipping installation of metrics hook for negative task id {}", context.getThisTaskId());
+        } else {
+            int intervalSecs;
 
-        LOG.debug("Initializing metrics hook for task {}", context.getThisTaskId());
+            LOG.debug("Initializing metrics hook for task {}", context.getThisTaskId());
 
-        intervalSecs = DEFAULT_INTERVAL_SECS;
-        if (conf.containsKey(CONF_SCHEDULING_METRICS_INTERVAL)) {
-            intervalSecs = Utils.getInt(conf.get(CONF_SCHEDULING_METRICS_INTERVAL)).intValue();
-        }
+            intervalSecs = DEFAULT_INTERVAL_SECS;
+            if (conf.containsKey(CONF_SCHEDULING_METRICS_INTERVAL)) {
+                intervalSecs = Utils.getInt(conf.get(CONF_SCHEDULING_METRICS_INTERVAL)).intValue();
+            }
 
         /*
          * We register one metric for each task. The full send graph will then be built up in the metric
          * consumer.
          */
-        context.registerMetric(METRIC_EMITTED_MESSAGES, new IMetric() {
-            @Override
-            public Object getValueAndReset() {
-                Map<Integer, AtomicLong> currentValue;
+            context.registerMetric(METRIC_EMITTED_MESSAGES, new IMetric() {
+                @Override
+                public Object getValueAndReset() {
+                    Map<Integer, AtomicLong> currentValue;
 
-                currentValue = SchedulingMetricsCollectionHook.this.sendgraphRef.getAndSet(createEmptySendgraphMap());
-                LOG.trace("Reset values for task {} and returning: {}", context.getThisTaskId(), currentValue.toString());
+                    currentValue = SchedulingMetricsCollectionHook.this.sendgraphRef.getAndSet(createEmptySendgraphMap());
+                    LOG.trace("Reset values for task {} and returning: {}", context.getThisTaskId(), currentValue.toString());
 
-                return currentValue;
-            }
+                    return currentValue;
+                }
 
-        }, intervalSecs); // call every n seconds
+            }, intervalSecs); // call every n seconds
 
-        // put an empty send graph object.
-        this.sendgraphRef.compareAndSet(null, createEmptySendgraphMap());
+            // put an empty send graph object.
+            this.sendgraphRef.compareAndSet(null, createEmptySendgraphMap());
+        }
     }
 
     @Override
@@ -122,8 +126,14 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
 
     @Override
     public void emit(EmitInfo info) {
-        for (Integer outTaskId : info.outTasks) {
-            this.sendgraphRef.get().get(outTaskId).incrementAndGet();
+        Map<Integer, AtomicLong> sendgraph;
+
+        sendgraph = this.sendgraphRef.get();
+
+        if (sendgraph != null) {
+            for (Integer outTaskId : info.outTasks) {
+                sendgraph.get(outTaskId).incrementAndGet();
+            }
         }
     }
 

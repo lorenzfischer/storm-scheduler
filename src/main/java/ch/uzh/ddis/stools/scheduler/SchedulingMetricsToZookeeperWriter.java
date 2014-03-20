@@ -10,6 +10,7 @@ import com.netflix.curator.framework.CuratorFramework;
 import com.netflix.curator.framework.api.BackgroundCallback;
 import com.netflix.curator.framework.api.CuratorEvent;
 import com.netflix.curator.framework.api.CuratorEventType;
+import com.netflix.curator.framework.api.Pathable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +51,7 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
      * The collected metrics will be written into subfolders under this path. The subfolders
      * are named after the topology names.
      * <p/>
-     * Example: /stools/scheduler/metrics/topoXYZ
+     * Example: /stools/scheduler/sendgraph/topoXYZ
      */
     public static final String DEFAULT_SCHEDULING_METRICS_ZK_PATH = "/stools/scheduler/sendgraph";
 
@@ -197,35 +198,36 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
 
         LOG.trace("Handling datapoints for task {}", taskId);
         for (DataPoint dp : dataPoints) {
+
             if (SchedulingMetricsCollectionHook.METRIC_EMITTED_MESSAGES.equals(dp.name)) {
                 LOG.trace("Datapoint of task {}: {}", taskId, dp.value.toString());
+
                 for (Map.Entry<Integer, AtomicLong> toTaskCount : ((Map<Integer, AtomicLong>) dp.value).entrySet()) {
                     // write the data into zk using a path constructed as follows:
                     // {fromTaskID}-{toTaskID}=count-as-byte-array
                     final String path = String.format("%s/%d-%d", this.zookeeperRootPath, taskId, toTaskCount.getKey());
                     final byte[] count = ByteBuffer.allocate(8).putLong(Long.valueOf(toTaskCount.getValue().get())).array();
                     try {
-                        zkClient.checkExists().inBackground(new BackgroundCallback() {
-                            @Override
-                            public void processResult(CuratorFramework client, CuratorEvent event) throws Exception {
-                                if (event.getType() == CuratorEventType.EXISTS && event.getStat() == null) {
-                                    // stat is null if the node does not exist
-                                    zkClient.create().forPath(path, count);
-                                } else {
-                                    zkClient.setData().forPath(path, count);
-                                }
 
-                                lastMetricUpdate.set(System.currentTimeMillis());
-                                // Reset the current timeout counter and re-schedule the date updater task.
-                                if (taskFuture == null || taskFuture.cancel(false) || taskFuture.isDone()) {
-                                    taskFuture = writerTaskExecutor.schedule(dateUpdateTask, updateTimeoutSecs,
-                                            TimeUnit.SECONDS);
-                                } else {
-                                    LOG.warn("Could not (re-) schedule the date update task.");
-                                }
-
+                        if (zkClient.checkExists().forPath(path) != null) {  // stat is null if the node does not exist
+                            // delete all nodes for this topology. as one node exists already, we assume that
+                            // all nodes are outdated, so we delete all information about the current topology.
+                            for (String fromTo : zkClient.getChildren().forPath(this.zookeeperRootPath)) {
+                                zkClient.delete().forPath(this.zookeeperRootPath + "/" + fromTo);
                             }
-                        }).forPath(path);
+                        }
+
+                        zkClient.create().forPath(path, count);
+
+                        lastMetricUpdate.set(System.currentTimeMillis());
+                        // Reset the current timeout counter and re-schedule the date updater task.
+                        if (taskFuture == null || taskFuture.cancel(false) || taskFuture.isDone()) {
+                            taskFuture = writerTaskExecutor.schedule(dateUpdateTask, updateTimeoutSecs,
+                                    TimeUnit.SECONDS);
+                        } else {
+                            LOG.warn("Could not (re-) schedule the date update task.");
+                        }
+
                     } catch (Exception e) {
                         LOG.error("Could not write send graph to zookeeper", e);
                     }

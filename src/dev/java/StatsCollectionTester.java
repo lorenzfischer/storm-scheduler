@@ -33,7 +33,7 @@ public class StatsCollectionTester {
         conf = new Config();
         conf.setNumWorkers(1);
         conf.setNumAckers(1);
-        conf.put("storm.scheduler", "ch.uzh.ddis.stools.scheduler.PartitioningScheduler");
+        conf.put("storm.scheduler", "ch.uzh.ddis.stools.scheduler.ZookeeperScheduler");
         conf.put("topology.auto.task.hooks",
                 Arrays.asList("ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook"));
         conf.registerMetricsConsumer(SchedulingMetricsToZookeeperWriter.class);
