@@ -29,6 +29,7 @@ public class Stootils {
      *                  the case that the singleton instance is null.
      * @return a singleton instance created from the first call of this method.
      */
+    @SuppressWarnings("unchecked") // the list of zookeeper servers is a list, otherwise we have bigger problems
     public static synchronized CuratorFramework getConfiguredZkClient(Map stormConf) {
         if (zkClientSingleton == null) {
             LOG.debug("Creating CuratorFramework client for ZK server at {}:{}", stormConf.get(Config.STORM_ZOOKEEPER_SERVERS), stormConf.get(Config.STORM_ZOOKEEPER_PORT));

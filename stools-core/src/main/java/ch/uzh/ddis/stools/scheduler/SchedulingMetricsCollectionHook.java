@@ -21,12 +21,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * You can configure it in the storm.yaml file as:
  * <pre>
  *   topology.auto.task.hooks:
- *     - class: "ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook"
+ *     - "ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook"
  * </pre>
  *
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
 public class SchedulingMetricsCollectionHook implements ITaskHook {
+
+    private static final long serialVersionUID = 1L;
 
     /**
      * The name for the metric that measures all emitted messages.
@@ -36,21 +38,22 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
     /**
      * The intervalSecs in which the metrics (the sendgraph) will be collected.
      */
-    public static final int DEFAULT_INTERVAL_SECS = 10;
+    public static final int DEFAULT_INTERVAL_SECS = 15;
 
     /**
      * The intervalSecs configured in this property will be used for counting (and resetting) the metrics collected
      * by this hook. If this is not set in the storm properties the default value of {@value #DEFAULT_INTERVAL_SECS}
-     * will be used.
+     * will be used. Be careful not to set this value too low (smaller than the default value), as this could lead
+     * to incomplete send data being written to ZK.
      */
-    public static final String CONF_SCHEDULING_METRICS_INTERVAL = "scheduling.metrics.interval.secs";
+    public static final String CONF_SCHEDULING_METRICS_INTERVAL_SECS = "scheduling.metrics.interval.secs";
 
     private final static Logger LOG = LoggerFactory.getLogger(SchedulingMetricsCollectionHook.class);
 
     /**
      * A reference to the send graph of the task this hook is attached to.
      */
-    private final AtomicReference<Map<Integer, AtomicLong>> sendgraphRef = new AtomicReference<>();
+    private transient AtomicReference<Map<Integer, AtomicLong>> sendgraphRef;
 
     /**
      * Create an empty sendgraph map which will return 0L values for each non-existing entry. The semantics
@@ -83,6 +86,23 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
         };
     }
 
+    /**
+     * Returns the configured interval in which metrics should be send to the metrics consumer.
+     *
+     * @param stormConf the configuration object to check.
+     * @return the interval value in seconds.
+     */
+    public static int getConfiguredSchedulingIntervalSecs(Map stormConf) {
+        int result;
+
+        result = DEFAULT_INTERVAL_SECS;
+        if (stormConf.containsKey(CONF_SCHEDULING_METRICS_INTERVAL_SECS)) {
+            result = Utils.getInt(stormConf.get(CONF_SCHEDULING_METRICS_INTERVAL_SECS)).intValue();
+        }
+
+        return result;
+    }
+
     @Override
     public void prepare(Map conf, final TopologyContext context) {
         if (context.getThisTaskId() < 0) {
@@ -90,23 +110,25 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
         } else {
             int intervalSecs;
 
-            LOG.debug("Initializing metrics hook for task {}", context.getThisTaskId());
+            LOG.info("Initializing metrics hook for task {}", context.getThisTaskId());
 
-            intervalSecs = DEFAULT_INTERVAL_SECS;
-            if (conf.containsKey(CONF_SCHEDULING_METRICS_INTERVAL)) {
-                intervalSecs = Utils.getInt(conf.get(CONF_SCHEDULING_METRICS_INTERVAL)).intValue();
-            }
+            this.sendgraphRef = new AtomicReference<>();
 
-        /*
-         * We register one metric for each task. The full send graph will then be built up in the metric
-         * consumer.
-         */
+            intervalSecs = getConfiguredSchedulingIntervalSecs(conf);
+
+            /*
+            * We register one metric for each task. The full send graph will then be built up in the metric
+            * consumer.
+            */
             context.registerMetric(METRIC_EMITTED_MESSAGES, new IMetric() {
                 @Override
                 public Object getValueAndReset() {
                     Map<Integer, AtomicLong> currentValue;
 
-                    currentValue = SchedulingMetricsCollectionHook.this.sendgraphRef.getAndSet(createEmptySendgraphMap());
+                    // don't reset sendgraph! todo: make this configurable
+                    // currentValue = SchedulingMetricsCollectionHook.this.sendgraphRef.getAndSet(createEmptySendgraphMap());
+                    currentValue = SchedulingMetricsCollectionHook.this.sendgraphRef.get();
+
                     LOG.trace("Reset values for task {} and returning: {}", context.getThisTaskId(), currentValue.toString());
 
                     return currentValue;
@@ -116,6 +138,12 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
 
             // put an empty send graph object.
             this.sendgraphRef.compareAndSet(null, createEmptySendgraphMap());
+
+            // put a zero weight for the task at hand, so we have a complete send graph in the metrics. Without this
+            // step, tasks that don't send or receive anything (for example the metrics-consumers) would not be
+            // contained in the sendgraph. todo: change the schedule format to contain task=>partition assignements, so
+            // we could do away with this workaround
+            this.sendgraphRef.get().get(context.getThisTaskId()).set(0);
         }
     }
 
@@ -126,13 +154,15 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
 
     @Override
     public void emit(EmitInfo info) {
-        Map<Integer, AtomicLong> sendgraph;
+        if (this.sendgraphRef != null) {
+            Map<Integer, AtomicLong> sendgraph;
 
-        sendgraph = this.sendgraphRef.get();
+            sendgraph = this.sendgraphRef.get();
 
-        if (sendgraph != null) {
-            for (Integer outTaskId : info.outTasks) {
-                sendgraph.get(outTaskId).incrementAndGet();
+            if (sendgraph != null) {
+                for (Integer outTaskId : info.outTasks) {
+                    sendgraph.get(outTaskId).incrementAndGet();
+                }
             }
         }
     }

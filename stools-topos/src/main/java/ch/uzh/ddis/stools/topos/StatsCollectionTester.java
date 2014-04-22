@@ -1,4 +1,4 @@
-/* TODO: License */
+package ch.uzh.ddis.stools.topos;/* TODO: License */
 
 import backtype.storm.Config;
 import backtype.storm.LocalCluster;
@@ -6,6 +6,8 @@ import backtype.storm.messaging.local;
 import backtype.storm.testing.TestWordCounter;
 import backtype.storm.topology.TopologyBuilder;
 import backtype.storm.tuple.Values;
+import ch.uzh.ddis.stools.monitoring.MonitoringMetricsCollectionHook;
+import ch.uzh.ddis.stools.monitoring.MonitoringMetricsToGraphiteWriter;
 import ch.uzh.ddis.stools.scheduler.SchedulingMetricsToZookeeperWriter;
 
 import java.util.Arrays;
@@ -35,8 +37,13 @@ public class StatsCollectionTester {
         conf.setNumAckers(1);
         conf.put("storm.scheduler", "ch.uzh.ddis.stools.scheduler.ZookeeperScheduler");
         conf.put("topology.auto.task.hooks",
-                Arrays.asList("ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook"));
+                Arrays.asList("ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook",
+                        "ch.uzh.ddis.stools.monitoring.MonitoringMetricsCollectionHook"));
         conf.registerMetricsConsumer(SchedulingMetricsToZookeeperWriter.class);
+
+        conf.registerMetricsConsumer(MonitoringMetricsToGraphiteWriter.class);
+        conf.put(MonitoringMetricsToGraphiteWriter.CONF_MONITORING_GRAPHITE_SERVER, "tentacle.ifi.uzh.ch:2003");
+
         conf.put(Config.TOPOLOGY_ENABLE_MESSAGE_TIMEOUTS, Boolean.TRUE);
 
         localCluster = new LocalCluster(conf);

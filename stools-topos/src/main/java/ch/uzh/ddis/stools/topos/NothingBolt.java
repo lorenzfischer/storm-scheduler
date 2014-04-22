@@ -1,4 +1,4 @@
-/* TODO: License */
+package ch.uzh.ddis.stools.topos;/* TODO: License */
 
 import backtype.storm.task.OutputCollector;
 import backtype.storm.task.TopologyContext;
@@ -11,6 +11,9 @@ import backtype.storm.tuple.Values;
 import java.util.Map;
 
 /**
+ * This bolt does (almost) nothing. For each tuple it receives, it takes the first element and emits it again. After
+ * that, it acknowledges the tuple.
+ *
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
 public class NothingBolt extends BaseRichBolt {
