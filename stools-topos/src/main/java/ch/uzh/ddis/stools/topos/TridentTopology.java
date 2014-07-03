@@ -1,11 +1,12 @@
-package ch.uzh.ddis.stools.topos;/* TODO: License */
+/* TODO: License */
+package ch.uzh.ddis.stools.topos;
 
 import backtype.storm.Config;
 import backtype.storm.LocalCluster;
 import backtype.storm.StormSubmitter;
 import backtype.storm.generated.AlreadyAliveException;
 import backtype.storm.generated.InvalidTopologyException;
-import backtype.storm.topology.TopologyBuilder;
+import backtype.storm.generated.StormTopology;
 import backtype.storm.tuple.Fields;
 import ch.uzh.ddis.stools.monitoring.LoggingMetricsConsumer;
 import ch.uzh.ddis.stools.monitoring.MonitoringMetricsToGraphiteWriter;
@@ -15,61 +16,62 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import storm.trident.Stream;
+import storm.trident.spout.RichSpoutBatchExecutor;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 /**
- * This class creates and submits a parallel topology to the cluster.
+ * Almost the same as Paralleltopo
  *
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
-public class ParallelTopology {
+public class TridentTopology {
 
     private final static Logger LOG = LoggerFactory.getLogger(ParallelTopology.class);
 
-    @Option(name="--help", aliases={"-h"}, usage="print help message")
+    @Option(name = "--help", aliases = {"-h"}, usage = "print help message")
     private boolean help = false;
 
-    @Option(name="--parallelism", aliases={"-p"}, metaVar="PARALLELISM",
-            usage="number of spouts/bolts to generate on each level")
+    @Option(name = "--parallelism", aliases = {"-p"}, metaVar = "PARALLELISM",
+            usage = "number of spouts/bolts to generate on each level")
     private int parallelism = 1;
 
-    @Option(name="--depth", aliases={"-d"}, metaVar="DEPTH",
-            usage="number of bolts to concatenate to each other.")
+    @Option(name = "--depth", aliases = {"-d"}, metaVar = "DEPTH",
+            usage = "number of bolts to concatenate to each other.")
     private int depth = 1;
 
-    @Option(name="--local", aliases={"-l"}, usage="Run on local cluster")
+    @Option(name = "--local", aliases = {"-l"}, usage = "Run on local cluster")
     private boolean local = false;
 
-    @Option(name="--nimbus", aliases={"-n"}, metaVar="NIMBUS",
-            usage="thrift connection to nimbus (e.g. 192.168.1.20:6627)")
+    @Option(name = "--nimbus", aliases = {"-n"}, metaVar = "NIMBUS",
+            usage = "thrift connection to nimbus (e.g. 192.168.1.20:6627)")
     private String nimbusServer = null;
 
-    @Option(name="--graphite", aliases={"-g"}, metaVar="NIMBUS",
-            usage="connection to the graphite server (e.g. 192.168.1.20:2003)")
+    @Option(name = "--graphite", aliases = {"-g"}, metaVar = "NIMBUS",
+            usage = "connection to the graphite server (e.g. 192.168.1.20:2003)")
     private String graphiteServer = "graphite.ifi.uzh.ch:2003";
 
-    @Option(name="--workers", aliases={"-w"}, metaVar="WORKERS",
-            usage="number of workers to assign to the topology")
+    @Option(name = "--workers", aliases = {"-w"}, metaVar = "WORKERS",
+            usage = "number of workers to assign to the topology")
     private int numWorkers = 1;
 
-    @Option(name="--maxSpoutPending", aliases={"-msp"}, metaVar="MSP",
-            usage="the maximum number of pending tuples in each worker")
-    private int maxSpoutPending = 100*1000;
+    @Option(name = "--maxSpoutPending", aliases = {"-msp"}, metaVar = "MSP",
+            usage = "the maximum number of pending tuples in each worker")
+    private int maxSpoutPending = 100 * 1000;
 
-    @Option(name="--messageTimeoutSecs", aliases={"-mts"}, metaVar="MTS",
-            usage="the maximum number of seconds we wait for a message to process before failing it")
+    @Option(name = "--messageTimeoutSecs", aliases = {"-mts"}, metaVar = "MTS",
+            usage = "the maximum number of seconds we wait for a message to process before failing it")
     private int messageTimeoutSecs = 100;
 
-    @Option(name="--numAckers", aliases={"-a"}, metaVar="A",
-            usage="the number of acker tasks to start.")
+    @Option(name = "--numAckers", aliases = {"-a"}, metaVar = "A",
+            usage = "the number of acker tasks to start.")
     private int numAckers = 0;
 
-    @Option(name="--disableAnielloStats", aliases={"-das"}, metaVar="DA",
-            usage="disable the statistics collection hook of aniello (you can do this if mysql turns out to be slow.")
-    private boolean disableAniello = false;
+    @Option(name = "--batchSize", aliases = {"-bs"}, metaVar = "BATCHSIZE",
+            usage = "the size of each trident batch.")
+    private int batchSize = 100 * 1000;
+
 
     public void realMain(String... args) {
 
@@ -79,7 +81,7 @@ public class ParallelTopology {
         try {
             // parse the arguments.
             parser.parseArgument(args);
-        } catch( CmdLineException e ) {
+        } catch (CmdLineException e) {
             // if there's a problem in the command line,
             // you'll get this exception. this will report
             // an error message.
@@ -87,7 +89,7 @@ public class ParallelTopology {
             this.help = true;
         }
 
-        if(this.help) {
+        if (this.help) {
             String desc;
 
             desc = "This class generates a topology which one spout and one bolt by default. If you set the " +
@@ -102,37 +104,51 @@ public class ParallelTopology {
             return;
         }
 
-        TopologyBuilder b;
+        storm.trident.TridentTopology topology;
+        StormTopology stormTopo;
         Config conf;
-        String topologyName = "parallel-topo";
+        String topologyName = "trident-topo";
         String previousName;
-        List<String> taskHooks;
 
 
-        b = new TopologyBuilder();
         LOG.trace("Adding Spout");
-        b.setSpout("UuidSpout", new UuidSpout(this.disableAniello), this.parallelism);
-        previousName="UuidSpout";
-        for (int i=0; i<this.depth; i++) {
-            String boltName;
+        topology = new storm.trident.TridentTopology();
 
-            boltName = "NothingBolt" + i;
-            LOG.trace("Adding bolt {}", boltName);
-            b.setBolt(boltName, new NothingBolt(this.disableAniello), this.parallelism)
-                    .fieldsGrouping(previousName, new Fields("keyfield"));
-            previousName = boltName;
+        Stream s = topology.newStream("UuidSpout", new UuidSpout(true)).name("UuidSpout").parallelismHint(this.parallelism);
+        previousName = "keyfield";
+
+        for (int i = 0; i < this.depth; i++) {
+            String newFieldName;
+
+            newFieldName = "field" + i;
+            LOG.trace("Adding level {} with new field {}", i, newFieldName);
+            s = s//
+                    .partitionBy(new Fields(previousName)) //
+                    .name(previousName)
+                    .each(new Fields(previousName), new IncreaseHashByOneFunction(this.parallelism), new Fields(newFieldName)) //
+                    .project(new Fields(newFieldName))
+                    .parallelismHint(this.parallelism);
+            previousName = newFieldName;
         }
 
+        stormTopo = topology.build();
+
         conf = new Config();
+
+        // set batch - size of spout
+        conf.put(RichSpoutBatchExecutor.MAX_BATCH_SIZE_CONF, this.batchSize);
+
+
         conf.setNumWorkers(this.numWorkers);
         if (this.numAckers > 0) {
             conf.setNumAckers(this.numAckers);
         }
 
-        taskHooks = new ArrayList<>(Arrays.asList( //
-                "ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook", //
-                "ch.uzh.ddis.stools.monitoring.MonitoringMetricsCollectionHook")); //
-        conf.put("topology.auto.task.hooks", taskHooks);
+        conf.put("topology.auto.task.hooks",
+                Arrays.asList( //
+                        "ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook", //
+                        "ch.uzh.ddis.stools.monitoring.MonitoringMetricsCollectionHook") //
+        );
         conf.registerMetricsConsumer(SchedulingMetricsToZookeeperWriter.class);
         conf.registerMetricsConsumer(MonitoringMetricsToGraphiteWriter.class);
         conf.registerMetricsConsumer(LoggingMetricsConsumer.class, 1); // write metrics into metrics.log
@@ -147,7 +163,7 @@ public class ParallelTopology {
         if (this.local) {
             LocalCluster localCluster;
             localCluster = new LocalCluster(conf);
-            localCluster.submitTopology(topologyName, conf, b.createTopology());
+            localCluster.submitTopology(topologyName, conf, stormTopo);
         } else {
 
             if (this.nimbusServer != null) {
@@ -157,7 +173,7 @@ public class ParallelTopology {
             }
 
             try {
-                StormSubmitter.submitTopology(topologyName, conf, b.createTopology());
+                StormSubmitter.submitTopology(topologyName, conf, stormTopo);
             } catch (AlreadyAliveException e) {
                 LOG.error("Could not submit topology.", e);
             } catch (InvalidTopologyException e) {
@@ -168,7 +184,7 @@ public class ParallelTopology {
     }
 
     public static void main(String[] args) throws Exception {
-        new ParallelTopology().realMain(args);
+        new TridentTopology().realMain(args);
     }
 
 }

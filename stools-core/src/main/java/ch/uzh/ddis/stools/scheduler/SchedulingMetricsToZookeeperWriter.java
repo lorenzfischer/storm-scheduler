@@ -175,8 +175,13 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
 
         // store configuration options in zookeeper
         try {
-            String numWorkerZkPath = zkTopologyConfigPath + "/" + Config.TOPOLOGY_WORKERS;
-            byte[] numWorkerData = ByteBuffer.allocate(8).putLong(((Long) stormConf.get(Config.TOPOLOGY_WORKERS)).intValue()).array();
+            String numWorkerZkPath;
+            Object numWorkerZkObject;
+            byte[] numWorkerData;
+
+            numWorkerZkPath = zkTopologyConfigPath + "/" + Config.TOPOLOGY_WORKERS;
+            numWorkerZkObject = stormConf.get(Config.TOPOLOGY_WORKERS);
+            numWorkerData = ByteBuffer.allocate(8).putLong(((Number)numWorkerZkObject).longValue()).array();
             if (zkClient.checkExists().forPath(numWorkerZkPath) == null) {
                 zkClient.create().creatingParentsIfNeeded().forPath(numWorkerZkPath, numWorkerData);
             } else {
@@ -223,7 +228,7 @@ public class SchedulingMetricsToZookeeperWriter implements IMetricsConsumer {
                     zkClient.setData().forPath(zookeeperSendgraphPath, sendgraphInJson.getBytes());
                     lastZookeeperUpdate.set(System.currentTimeMillis());
                 } catch (Exception e) {
-                    String errorMsg = "Couldn't write update time tamp into Zookeeper";
+                    String errorMsg = "Couldn't write json sendgraph into Zookeeper";
                     LOG.error(errorMsg);
                 }
 

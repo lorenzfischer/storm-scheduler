@@ -25,9 +25,9 @@ import java.util.List;
  *
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
-public class ParallelTopology {
+public class PayloadTopology {
 
-    private final static Logger LOG = LoggerFactory.getLogger(ParallelTopology.class);
+    private final static Logger LOG = LoggerFactory.getLogger(PayloadTopology.class);
 
     @Option(name="--help", aliases={"-h"}, usage="print help message")
     private boolean help = false;
@@ -67,9 +67,14 @@ public class ParallelTopology {
             usage="the number of acker tasks to start.")
     private int numAckers = 0;
 
+    @Option(name="--payloadFactor", aliases={"-f"}, metaVar="PF",
+            usage="a multiplier that defines the size of the payload.")
+    private int payloadFactor = 100;
+
     @Option(name="--disableAnielloStats", aliases={"-das"}, metaVar="DA",
             usage="disable the statistics collection hook of aniello (you can do this if mysql turns out to be slow.")
     private boolean disableAniello = false;
+
 
     public void realMain(String... args) {
 
@@ -104,21 +109,21 @@ public class ParallelTopology {
 
         TopologyBuilder b;
         Config conf;
-        String topologyName = "parallel-topo";
+        String topologyName = "payload-topo";
         String previousName;
         List<String> taskHooks;
 
 
         b = new TopologyBuilder();
         LOG.trace("Adding Spout");
-        b.setSpout("UuidSpout", new UuidSpout(this.disableAniello), this.parallelism);
-        previousName="UuidSpout";
+        b.setSpout("UuidPayloadSpout", new UuidPayloadSpout(this.disableAniello, this.payloadFactor), this.parallelism);
+        previousName="UuidPayloadSpout";
         for (int i=0; i<this.depth; i++) {
             String boltName;
 
-            boltName = "NothingBolt" + i;
+            boltName = "NothingPayloadBolt" + i;
             LOG.trace("Adding bolt {}", boltName);
-            b.setBolt(boltName, new NothingBolt(this.disableAniello), this.parallelism)
+            b.setBolt(boltName, new NothingPayloadBolt(this.disableAniello), this.parallelism)
                     .fieldsGrouping(previousName, new Fields("keyfield"));
             previousName = boltName;
         }
@@ -168,7 +173,7 @@ public class ParallelTopology {
     }
 
     public static void main(String[] args) throws Exception {
-        new ParallelTopology().realMain(args);
+        new PayloadTopology().realMain(args);
     }
 
 }

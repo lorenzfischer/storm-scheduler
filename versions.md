@@ -1,5 +1,31 @@
 Revision History
 ================
+1.7.2-SNAPSHOT - skip to next topology if there are no more supervisors to assign a topology
+1.7.1-SNAPSHOT - fix a bug in the ZookeeperScheduler in which the scheduler would fail, when it tried
+                 to schedule work on a supervisor whose worker slots where all blocked.
+1.7.0-SNAPSHOT - give each topology its own name and don't just just "test-topo" for all of them
+1.6.3-SNAPSHOT - store numWorkers metric as long in zk, but read in as Number.
+1.6.2-SNAPSHOT - store numWorkers metric as integer in zk not as long
+1.6.1-SNAPSHOT - start each line of the metrics log with a tab and decrease padding of metrics names to 33
+1.6.0-SNAPSHOT - cpu und network statistics collection
+1.4.0-SNAPSHOT - count all emitted messages again
+1.3.0-SNAPSHOT - new trident topo
+1.1.1-SNPASHOT - try not measuring ackers and metrics again.
+
+1.1.0-SNPASHOT - reduce number of ackers to 1, but measure traffic of ackers and include them in the scheduling
+
+1.0.2-SNAPSHOT - assign non-scheduled nodes in a round-robin fashion (to accommodate for all the ackers and metrics)
+1.0.1-SNPASHOT - remove the self-references from json, rename the "graph" node to "links"
+
+0.9.1-SNAPSHOT - removed error message when tasks are found that don't exist in the schedule
+0.9.0-SNAPSHOT - exclude acks and metrics, but use even scheduler to schedule nodes that are not contained in the
+                 partitioning.
+
+0.8.0-SNAPSHOT - include acks and metrics again
+
+0.7.1-SNAPSHOT - corrected debug output + write 1 value for metric and ack channels
+0.7.0-SNAPSHOT - don't measure "ack"-messages for creating the sendgraph.
+
 0.6.1-SNAPSHOT - write json into zookeeper and only do it once every 15 seconds
 
 0.5.1-SNAPSHOT - don't reset counters in each cycle. we will have to change this back in order to make it dynamic

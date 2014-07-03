@@ -26,10 +26,10 @@ public class StatsCollectionTester {
         LocalCluster localCluster;
 
         b = new TopologyBuilder();
-        b.setSpout("RandomSpout", new RandomSpout(), parallelismHint);
-        b.setBolt("NothingBolt1", new NothingBolt(), parallelismHint)
+        b.setSpout("RandomSpout", new RandomSpout(true), parallelismHint);
+        b.setBolt("NothingBolt1", new NothingBolt(true), parallelismHint)
                 .shuffleGrouping("RandomSpout");
-        b.setBolt("NothingBolt2", new NothingBolt(), parallelismHint)
+        b.setBolt("NothingBolt2", new NothingBolt(true), parallelismHint)
                 .shuffleGrouping("NothingBolt1");
 
         conf = new Config();

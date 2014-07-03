@@ -1,5 +1,22 @@
 <configuration>
 
+    <appender name="METRICS" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>target/logs/metrics.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>metrics.log.%i</fileNamePattern>
+            <minIndex>1</minIndex>
+            <maxIndex>9</maxIndex>
+        </rollingPolicy>
+
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>10MB</maxFileSize>
+        </triggeringPolicy>
+
+        <encoder>
+            <pattern>%d %-8r %m%n</pattern>
+        </encoder>
+    </appender>
+
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <!-- encoders are assigned the type
              ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
@@ -12,9 +29,19 @@
         <appender-ref ref="STDOUT" />
     </root>
 
+    <logger name="ch.uzh.ddis.stools.monitoring.LoggingMetricsConsumer" additivity="false" >
+        <level value="INFO"/>
+        <appender-ref ref="METRICS"/>
+    </logger>
+
     <logger name="ch.uzh.ddis" level="trace"/>
+
     <logger name="ch.uzh.ddis.stools.monitoring" level="debug"/>
+    <logger name="ch.uzh.ddis.stools.monitoring.MonitoringMetricsCollectionHook" level="debug"/>
+
     <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsCollectionHook" level="debug"/>
     <logger name="ch.uzh.ddis.stools.scheduler.SchedulingMetricsToZookeeperWriter" level="debug"/>
+
+    <logger name="midlab.storm.scheduler" level="debug"/>
 
 </configuration>

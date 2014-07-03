@@ -4,6 +4,7 @@ package ch.uzh.ddis.stools.scheduler;
 
 import backtype.storm.scheduler.*;
 import backtype.storm.tuple.Values;
+import com.esotericsoftware.minlog.Log;
 import com.netflix.curator.framework.CuratorFramework;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
@@ -178,8 +179,8 @@ public class ZookeeperScheduler implements IScheduler {
                 LOG.debug("Topo {}: Removing all assignments of topology", topologyId);
 
                 // the schedule is one number per line, each being the index of the partition the task for the given
-                // line should be assigned to. The line number is the task index. the partition ids are 0-based
-                // because the METIS partitionings use that format
+                // line should be assigned to. The line number is the task index (0-based!).
+                // the partition ids are 0-based because the METIS partitionings use that format
                 numWorkers = 0;
                 taskToWorkerIndexString = schedule.split("\n");
                 taskToWorkerIndex = new int[taskToWorkerIndexString.length];
@@ -227,33 +228,41 @@ public class ZookeeperScheduler implements IScheduler {
                         LOG.trace("Topo {}: assigning task with id {} to partition {}",
                                 new Object[] {topologyId, taskId, partitionId});
                         tasksOfPartition.get(partitionId).add(executor);
-                    } else {
-                        StringBuilder taskIDs;
-                        String errorMsg;
-                        int numExecutorsInTopology;
+                    } else { // for all ackers and metrics, we do round-robbing
+                        int partitionId;
 
-                        numExecutorsInTopology = topology.getExecutors().size();
-                        taskIDs = new StringBuilder();
-                        for (ExecutorDetails executorInner : topology.getExecutors()) {
-                            if (taskIDs.length() > 0) {
-                                taskIDs.append(", ");
-                            }
-                            taskIDs.append(executorInner.getStartTask());
-                        }
-
-                        errorMsg = String.format("Topo %s: Incompatible schedule found in zookeeper: There are only " +
-                                "assignments for %d tasks, while the topology has %d executors. Skipping " +
-                                "topology. The schedule found looks as follows:\n" +
-                                "%s\n" +
-                                "taskIDs for tasks to assign:\n" +
-                                "%s",
-                                topologyId, taskToWorkerIndex.length, numExecutorsInTopology,
-                                schedule.replaceAll("\n", ", "), taskIDs.toString());
-                        LOG.debug(errorMsg);
-
-                        unscheduledTopologies.put(topologyId, topology);
-                        continue with_next_topology; // continue with next topology, maybe it will work when we are called next time
+                        partitionId = taskId % numWorkers;
+                        LOG.trace("Topo {}: assigning task with id {} to partition {} (round-robin)",
+                                new Object[]{topologyId, taskId, partitionId});
+                        tasksOfPartition.get(partitionId).add(executor);
                     }
+//                    else {
+//                        StringBuilder taskIDs;
+//                        String errorMsg;
+//                        int numExecutorsInTopology;
+//
+//                        numExecutorsInTopology = topology.getExecutors().size();
+//                        taskIDs = new StringBuilder();
+//                        for (ExecutorDetails executorInner : topology.getExecutors()) {
+//                            if (taskIDs.length() > 0) {
+//                                taskIDs.append(", ");
+//                            }
+//                            taskIDs.append(executorInner.getStartTask());
+//                        }
+//
+//                        errorMsg = String.format("Topo %s: Incompatible schedule found in zookeeper: There are only " +
+//                                "assignments for %d tasks, while the topology has %d executors. Skipping " +
+//                                "topology. The schedule found looks as follows:\n" +
+//                                "%s\n" +
+//                                "taskIDs for tasks to assign:\n" +
+//                                "%s",
+//                                topologyId, taskToWorkerIndex.length, numExecutorsInTopology,
+//                                schedule.replaceAll("\n", ", "), taskIDs.toString());
+//                        LOG.debug(errorMsg);
+//
+//                        unscheduledTopologies.put(topologyId, topology);
+//                        continue with_next_topology; // continue with next topology, maybe it will work when we are called next time
+//                    }
 
                 }
 
@@ -278,7 +287,8 @@ public class ZookeeperScheduler implements IScheduler {
                  */
                 availableSupervisors = new LinkedList<>();
                 for (SupervisorDetails supervisor : cluster.getSupervisors().values()) {
-                    if (!cluster.isBlackListed(supervisor.getId())) {
+                    if (!cluster.isBlackListed(supervisor.getId()) &&               // supervisor is not blacklisted ...
+                            (cluster.getAssignableSlots(supervisor).size() > 0)) {  // ... and has free slots
                         if (cluster.getUsedPorts(supervisor).size() > 0) {
                             availableSupervisors.addLast(supervisor); // has used ports
                         } else {
@@ -286,6 +296,14 @@ public class ZookeeperScheduler implements IScheduler {
                         }
                     }
                 }
+
+                // check if there are enough supervisors available to fully schedule the topology
+                if (availableSupervisors.size() < tasksOfPartition.size()) {
+                    Log.warn("Could not schedule topology {} " +
+                            " because there are no more supervisors available", topologyId);
+                    continue with_next_topology;
+                }
+
                 // now assign the work
                 LOG.debug("Applying the schedule to the storm topology {}", topologyId);
                 for (Set<ExecutorDetails> tasks : tasksOfPartition) {
@@ -296,16 +314,23 @@ public class ZookeeperScheduler implements IScheduler {
                     int taskIdx; // used to distribute the tasks among the worker slots
                     int workerIdx;
 
-                    if (availableSupervisors.size() == 0) {
-                        LOG.error("Could not schedule topology {} " +
-                                "because there are no more supervisors available", topologyId);
+                    numWorkersOfSupervisor = 0;
+                    supervisor = null;
+                    supervisorWorkers = null;
+
+                    // we loop until we find a supervisor that has a worker ...
+                    while (numWorkersOfSupervisor == 0) {
+                        if (availableSupervisors.size() == 0) { // ... or until there are no more supervisors
+                            throw new IllegalStateException("Could not schedule topology " + topologyId +
+                                    " because there are no more supervisors available");
+                        }
+
+                        supervisor = availableSupervisors.removeFirst();
+                        supervisorWorkers = cluster.getAssignableSlots(supervisor);
+
+                        // distribute tasks among all worker slots
+                        numWorkersOfSupervisor = supervisorWorkers.size();
                     }
-
-                    supervisor = availableSupervisors.removeFirst();
-                    supervisorWorkers = cluster.getAssignableSlots(supervisor);
-
-                    // distribute tasks among all worker slots
-                    numWorkersOfSupervisor = supervisorWorkers.size();
 
                     LOG.trace("Topo {}: Assigning {} tasks to {} workers on supervisor {}",
                            new Object[] {topologyId, tasks.size(), numWorkersOfSupervisor, supervisor.getHost()});

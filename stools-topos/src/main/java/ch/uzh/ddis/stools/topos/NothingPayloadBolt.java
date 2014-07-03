@@ -18,7 +18,7 @@ import java.util.Map;
  *
  * @author "Lorenz Fischer" <lfischer@ifi.uzh.ch>
  */
-public class NothingBolt extends BaseRichBolt {
+public class NothingPayloadBolt extends BaseRichBolt {
 
     private OutputCollector collector;
 
@@ -29,16 +29,12 @@ public class NothingBolt extends BaseRichBolt {
      */
     protected boolean disableAniello;
 
-    public NothingBolt(boolean disableAniello) {
+    public NothingPayloadBolt(boolean disableAniello) {
         this.disableAniello = disableAniello;
     }
 
-
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
-        // this object is used in the emit/execute method to compute the number of inter-node messages
-        this.taskMonitor = new TaskMonitor(context.getThisTaskId());
-
         this.collector = collector;
 
         if (!this.disableAniello) {
@@ -56,13 +52,13 @@ public class NothingBolt extends BaseRichBolt {
             taskMonitor.notifyTupleReceived(input);
         }
 
-        this.collector.emit(input, new Values(input.getString(0))); // we assume there is only one field
+        this.collector.emit(input, new Values(input.getString(0), input.getString(1)));
         this.collector.ack(input);
     }
 
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(new Fields("keyfield"));
+        declarer.declare(new Fields("keyfield", "payload"));
     }
 }

@@ -6,10 +6,15 @@ import backtype.storm.hooks.info.*;
 import backtype.storm.metric.api.IMetric;
 import backtype.storm.task.TopologyContext;
 import backtype.storm.utils.Utils;
+import ch.uzh.ddis.stools.utils.NetStat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -42,6 +47,16 @@ public class MonitoringMetricsCollectionHook implements ITaskHook {
      */
     public static final String METRIC_THROUGHPUT = "throughput";
 
+    /**
+     * This metric is emitted once per worker (VM) and reflects the load of the cpu.
+     */
+    public static final String METRIC_WORKER_CPU_LOAD = "worker_cpu_load";
+
+    /**
+     * This metric is emitted once per worker (VM) and reflects the number of bytes sent + received of the network.
+     */
+    public static final String METRIC_WORKER_NETWORK_BYTES = "worker_network_bytes";
+
 //    /**
 //     * The name for the metric that measures the length of the longest queue. Of all bolts.
 //     */
@@ -62,6 +77,17 @@ public class MonitoringMetricsCollectionHook implements ITaskHook {
     public static final String CONF_MONITORING_METRICS_INTERVAL = "monitoring.metrics.interval.secs";
 
     private static final Logger LOG = LoggerFactory.getLogger(MonitoringMetricsCollectionHook.class);
+
+    /**
+     * On each worker (VM), we register one metric to collect information about the machines CPU
+     * and network interface usage. In order to prevent multiple of these collectors being started, we
+     * write the taskID of the first task initiating this metric into this static variable and skip
+     * the registration for all remaining tasks.
+     * <p/>
+     * For as long as there is only one worker per supervisor, this allows us to measure cpu load and
+     * network load per cluster machine.
+     */
+    private static AtomicInteger workerMonitoringTaskId = new AtomicInteger(Integer.MIN_VALUE);
 
 
     /**
@@ -110,7 +136,6 @@ public class MonitoringMetricsCollectionHook implements ITaskHook {
 
         }, intervalSecs); // call every n seconds
 
-
         context.registerMetric(METRIC_THROUGHPUT, new IMetric() {
             @Override
             public Object getValueAndReset() {
@@ -127,6 +152,51 @@ public class MonitoringMetricsCollectionHook implements ITaskHook {
             }
 
         }, intervalSecs); // call every n seconds
+
+        /*
+            we test if the workerMonitoringTaskId is still set to Integer.MIN_VALUE and if not, set it to the id of the
+            task we're initiating here. As the workerMonitoringTaskId is updated atomically, there can always only be one
+            such workerMonitor registered per VM (the workerMonitoringTaskId is a static variable).
+         */
+        if (workerMonitoringTaskId.compareAndSet(Integer.MIN_VALUE, context.getThisTaskId())) {
+
+            // register one metric to measure cpu load
+            context.registerMetric(METRIC_WORKER_CPU_LOAD, new IMetric() {
+                private OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+
+                @Override
+                public Object getValueAndReset() {
+                    return Double.valueOf(osBean.getSystemLoadAverage() * 100).longValue();
+                }
+
+            }, intervalSecs); // call every n seconds
+
+
+            // register one metric to measure network load
+            context.registerMetric(METRIC_WORKER_NETWORK_BYTES, new IMetric() {
+                private Long lastValue = 0L;
+
+                @Override
+                public Object getValueAndReset() {
+                    long metric = 0L;
+                    try {
+                        long currentValue;
+
+                        currentValue = NetStat.getTotalTransmittedBytes();
+                        if (lastValue > 0) {
+                            metric = (currentValue - lastValue) / intervalSecs;
+                        }
+                        lastValue = currentValue;
+
+                    } catch (IOException e) {
+                        LOG.warn("Error occurred while trying to get network load.", e);
+                    }
+
+                    return metric;
+                }
+
+            }, intervalSecs); // call every n seconds
+        }
     }
 
     @Override
@@ -136,7 +206,11 @@ public class MonitoringMetricsCollectionHook implements ITaskHook {
 
     @Override
     public void emit(EmitInfo info) {
-        // in order to compute the throughput, we just count how many messages were emitted by this task
+        //System.out.println(Thread.currentThread().getName());
+        /*
+          This method is executed for ALL emitted messages. No matter if it is
+          a spout, bolt, or system bolt (acker).
+         */
         this.emittedMessages.incrementAndGet();
     }
 

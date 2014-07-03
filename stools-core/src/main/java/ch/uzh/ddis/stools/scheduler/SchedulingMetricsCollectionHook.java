@@ -159,9 +159,12 @@ public class SchedulingMetricsCollectionHook implements ITaskHook {
 
             sendgraph = this.sendgraphRef.get();
 
-            if (sendgraph != null) {
-                for (Integer outTaskId : info.outTasks) {
-                    sendgraph.get(outTaskId).incrementAndGet();
+            if (!info.stream.contains("__ack") &&          // don't measure ack messages
+                    !info.stream.contains("__metrics")) {  // don't measure metrics messages
+                if (sendgraph != null) {
+                    for (Integer outTaskId : info.outTasks) {
+                        sendgraph.get(outTaskId).incrementAndGet();
+                    }
                 }
             }
         }

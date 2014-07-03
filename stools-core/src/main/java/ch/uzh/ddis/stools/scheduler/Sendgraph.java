@@ -68,7 +68,8 @@ class Sendgraph {
         links = new ArrayList<>();
         for (Integer fromNode : this.graph.rowKeySet()) {
             for (Integer toNode : this.graph.columnKeySet()) {
-                if (this.graph.contains(fromNode, toNode)) {
+                if (!fromNode.equals(toNode) && // todo: find out where these come from
+                        this.graph.contains(fromNode, toNode)) {
                     Map<String, Object> values = new HashMap<String, Object>();
                     values.put("source", fromNode);
                     values.put("target", toNode);
@@ -77,7 +78,7 @@ class Sendgraph {
                 }
             }
         }
-        data.put("graph", links);
+        data.put("links", links);
 
         gson = new Gson();
         result = gson.toJson(data);

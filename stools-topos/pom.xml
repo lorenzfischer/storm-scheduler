@@ -5,23 +5,31 @@
     <parent>
         <artifactId>stools</artifactId>
         <groupId>ch.uzh.ifi.ddis.stools</groupId>
-        <version>0.6.1-SNAPSHOT</version>
+        <version>1.7.2-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>stools-topos</artifactId>
+    <version>1.11.4-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>stools-core</artifactId>
-            <version>${project.version}</version>
+            <version>${parent.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.storm</groupId>
                     <artifactId>storm-core</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!-- aniello's scheduler -->
+        <dependency>
+            <groupId>aniello</groupId>
+            <artifactId>aniello-schedulers</artifactId>
+            <version>1.4.4-SNAPSHOT</version>
         </dependency>
 
         <!-- command line parsing lib -->

@@ -41,10 +41,10 @@ public class MonitoringMetricsToGraphiteWriter implements IMetricsConsumer {
      * to "{@value #DEFAULT_GRAPHITE_BASE_PATH}", the path for the "throughput" metric of topology "topoXYZ" would be
      * defined as:
      * <p/>
-     * Example: {@value #DEFAULT_GRAPHITE_BASE_PATH}topoXYZ.throughput
+     * Example: {@value #DEFAULT_GRAPHITE_BASE_PATH}.topoXYZ.throughput
      * <p/>
      */
-    public static final String DEFAULT_GRAPHITE_BASE_PATH = "stools.";
+    public static final String DEFAULT_GRAPHITE_BASE_PATH = "stools";
 
     /**
      * If a property with this name can be found in the storm configuration object, the graphite base path will be set
@@ -193,6 +193,8 @@ public class MonitoringMetricsToGraphiteWriter implements IMetricsConsumer {
         this.metricsToProcess = new HashMap<>();
         this.metricsToProcess.put(MonitoringMetricsCollectionHook.METRIC_COMPLETE_LATENCY, new AverageAggregator());
         this.metricsToProcess.put(MonitoringMetricsCollectionHook.METRIC_THROUGHPUT, new SumAggregator());
+        this.metricsToProcess.put(MonitoringMetricsCollectionHook.METRIC_WORKER_CPU_LOAD, new SumAggregator());
+        this.metricsToProcess.put(MonitoringMetricsCollectionHook.METRIC_WORKER_NETWORK_BYTES, new SumAggregator());
     }
 
     @Override
@@ -216,11 +218,18 @@ public class MonitoringMetricsToGraphiteWriter implements IMetricsConsumer {
                     Long value = this.metricsToProcess.get(dp.name).update(taskId, (Long) dp.value);
 
                     // prevent excessive writing to graphite by only writing the value to graphite when the task with
-                    // ID "1" gets updated.
-                    if (taskId == 1) {
+                    // ID "1" or if the metric contains the string "worker" gets updated. Metrics that are only
+                    // collected once per worker and if the sending task happens to not be a task with ID "1" we
+                    // wouldn't write anything to graphite otherwise.
+                    if (taskId == 1 || dp.name.toLowerCase().contains("worker")) {
                         try {
-                            writer.write(String.format("%s %d %d", this.graphitePath + dp.name, value, timestamp));
+                            String line;
+
+                            line = String.format("%s %d %d", this.graphitePath + dp.name, value, timestamp);
+                            LOG.trace("Writing to graphite: {} ", line);
+                            writer.write(line);
                             writer.newLine();
+
                         } catch (IOException e) {
                             LOG.warn("Error while writing data to graphite: ", e);
                         }

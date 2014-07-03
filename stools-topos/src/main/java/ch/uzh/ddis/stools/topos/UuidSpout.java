@@ -7,14 +7,15 @@ import backtype.storm.topology.base.BaseRichSpout;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
+import midlab.storm.scheduler.TaskMonitor;
+import midlab.storm.scheduler.WorkerMonitor;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.security.provider.MD5;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -24,28 +25,41 @@ import java.util.UUID;
  */
 public class UuidSpout extends BaseRichSpout {
 
-    private final static Logger LOG = LoggerFactory.getLogger(UuidSpout.class);
+    protected final Logger LOG = LoggerFactory.getLogger(getClass());
 
-    private String uuid;
+    protected String uuid;
 
-    private SpoutOutputCollector collector;
+    protected SpoutOutputCollector collector;
 
-    private long emitCount;
+    protected long emitCount;
+
+    protected int numSpouts;
+
+    protected int thisTaskIndex;
+
+    protected TaskMonitor taskMonitor;
+
+    /**
+     * If this is set to true, the statistics for Aniello's scheduler will not be collected.
+     */
+    protected boolean disableAniello;
+
+    public UuidSpout(boolean disableAniello) {
+        this.disableAniello = disableAniello;
+    }
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(new Fields("message"));
+        declarer.declare(new Fields("keyfield"));
     }
 
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
         MessageDigest md;
-        int numSpouts;
-        int thisTaskIndex;
         int counter;
 
-        numSpouts = context.getComponentTasks(context.getThisComponentId()).size();
-        thisTaskIndex = context.getThisTaskIndex();
+        this.thisTaskIndex = context.getThisTaskIndex();
+        this.numSpouts = context.getComponentTasks(context.getThisComponentId()).size();
         counter = 0;
 
         try {
@@ -58,24 +72,40 @@ public class UuidSpout extends BaseRichSpout {
         // of bolts on each level as there are spouts, we just keep looking until we find a uuid whose hash code would
         // be assigned to the id of this spout (if it were a bolt).
         do {
-
-            if (++counter > 1000*1000) {
+            if (++counter > 1000 * 1000) {
                 throw new RuntimeException("Unable to generate required UUID in 1 mio tries.");
             }
-
-            this.uuid = new String(md.digest(UUID.randomUUID().toString().getBytes()));
-        } while (this.uuid.hashCode() %  numSpouts != thisTaskIndex);
+            byte[] bytes = md.digest(UUID.randomUUID().toString().getBytes());
+            this.uuid = new String(bytes);
+        } while (this.uuid.hashCode() % this.numSpouts != this.thisTaskIndex);
 
         this.collector = collector;
+
+        if (!this.disableAniello) {
+            // this will create/configure the worker monitor once per worker
+            WorkerMonitor.getInstance().setContextInfo(context);
+
+            // this object is used in the emit/execute method to compute the number of inter-node messages
+            this.taskMonitor = new TaskMonitor(context.getThisTaskId());
+        }
     }
 
     @Override
     public void nextTuple() {
-        this.collector.emit(new Values(this.uuid));
-        this.emitCount++;
-        if ((emitCount % (100 * 1000) ) == 0) {
-            LOG.info("Emitted {} tuples", this.emitCount);
+        if (!this.disableAniello) {
+            taskMonitor.checkThreadId();
         }
-        Utils.sleep(1);
+
+        this.emitCount++; // we start with msgId = 1
+        this.collector.emit(new Values(this.uuid), this.emitCount);
+        if ((emitCount % (100 * 1000)) == 0) {
+            LOG.info("Emitted {} tuples", this.emitCount);
+            Utils.sleep(1);
+        }
+    }
+
+    @Override
+    public void fail(Object msgId) {
+        LOG.error("Message with Id {} failed.", msgId);
     }
 }
