@@ -1,5 +1,6 @@
 Revision History
 ================
+1.11.5-SNAPSHOT - call taskMonitor.checkThreadId() in UuidPayloadSpout
 1.11.4-SNAPSHOT - aniello 1.4.4-SNAPSHOT
 1.11.3-SNAPSHOT - parent 1.7.2-SNAPSHOT
 1.11.2-SNAPSHOT - use Aniello 1.4.1-SNAPSHOT

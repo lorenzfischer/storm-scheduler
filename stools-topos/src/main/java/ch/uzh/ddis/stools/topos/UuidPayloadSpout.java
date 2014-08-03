@@ -38,6 +38,10 @@ public class UuidPayloadSpout extends UuidSpout {
 
     @Override
     public void nextTuple() {
+        if (!this.disableAniello) {
+            taskMonitor.checkThreadId();
+        }
+
         this.emitCount++; // we start with msgId = 1
         this.collector.emit(new Values(this.uuid, this.payload), this.emitCount);
         if ((emitCount % (100 * 1000) ) == 0) {
