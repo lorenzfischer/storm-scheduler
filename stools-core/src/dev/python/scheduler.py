@@ -180,19 +180,29 @@ def schedule(zk, topology):
     print("scheduling using data at {0} writing schedule into {1}".
           format(topology_metrics_path, topology_schedule_path))
 
-    schedule = ""
+    jsonStr = ""
+    retry = 0
+    while len(jsonStr) == 0:
+        retry += 1
+        if retry >= 24:  # try for two minutes
+            raise RuntimeError("Could not find send graph data in Zookeeper")
+        elif retry > 1:
+            print("Could not find send graph data in Zookeeper. Retrying in 10 seconds...")
+            time.sleep(10)  # wait for 5 seconds before retrying
 
-    # get number of workers for topology
-    (nw_value, nw_stat) = zk.get(topology_config_path + "/topology.workers")
-    num_workers = byteArrayToInt(nw_value)
+        # extract the sendgraph from zookeeper
+        (jsonStr, node_stat) = zk.get(topology_sendgraph_path)
 
-    # extract the sendgraph from zookeeper
-    (jsonStr, node_stat) = zk.get(topology_sendgraph_path)
+    # parse the json graph
     jsonSendGraph = json.loads(jsonStr)
 
     # write json to file for debugging
     with open("tmp.graph.json", 'w') as f:
         f.write(jsonStr)
+
+     # get number of workers for topology
+    (nw_value, nw_stat) = zk.get(topology_config_path + "/topology.workers")
+    num_workers = byteArrayToInt(nw_value)
 
     # the output of the schedules need to be the same as the partitioning files of METIS:
     # one line per vertex, each having one number which is the partition (worker) it should
