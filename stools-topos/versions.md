@@ -1,5 +1,7 @@
 Revision History
 ================
+1.12.1-SNAPSHOT - always set ackers (also to 0 if requested)
+1.12.0-SNAPSHOT - new FixedRateTopology
 1.11.5-SNAPSHOT - call taskMonitor.checkThreadId() in UuidPayloadSpout
 1.11.4-SNAPSHOT - aniello 1.4.4-SNAPSHOT
 1.11.3-SNAPSHOT - parent 1.7.2-SNAPSHOT

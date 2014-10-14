@@ -10,7 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>stools-topos</artifactId>
-    <version>1.11.5-SNAPSHOT</version>
+    <version>1.12.1-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
