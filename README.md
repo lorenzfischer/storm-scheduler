@@ -3,7 +3,7 @@ Storm-Scheduler
 
 This repository contains the code for the graph partitioning based storm scheduler presented in the paper
 
-**Lorenz Fischer, Abraham Bernstein: *Workload scheduling in distributed stream processors using graph partitioning.* 2015 IEEE International Conference on Big Data, Big Data 2015, Santa Clara, CA, USA, October 29 - November 1, 2015. IEEE, 2015.**
+*Lorenz Fischer, Abraham Bernstein: *Workload scheduling in distributed stream processors using graph partitioning.* 2015 IEEE International Conference on Big Data, Big Data 2015, Santa Clara, CA, USA, October 29 - November 1, 2015. IEEE, 2015.*
 
 The main parts of the code are:
 
