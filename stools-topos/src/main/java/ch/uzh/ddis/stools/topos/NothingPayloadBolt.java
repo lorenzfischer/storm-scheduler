@@ -1,4 +1,5 @@
-package ch.uzh.ddis.stools.topos;/* TODO: License */
+/* TODO: License */
+package ch.uzh.ddis.stools.topos;
 
 import backtype.storm.task.OutputCollector;
 import backtype.storm.task.TopologyContext;
