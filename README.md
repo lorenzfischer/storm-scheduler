@@ -9,16 +9,16 @@ The main parts of the code are:
 
 1. The scheduler (https://github.com/lorenzfischer/storm-scheduler/tree/master/stools-core)
   
-  * The java scheduler code: https://github.com/lorenzfischer/storm-scheduler/tree/master/stools-core/src/main/java/ch/uzh/ddis/stools/scheduler
-  * The python script that reads the sendgraph from zookeeper, calls METIS and writes the resulting schedule back into zookeeper: https://github.com/lorenzfischer/storm-scheduler/blob/master/stools-core/src/dev/python/scheduler.py
+  * The scheduler code (Java): https://github.com/lorenzfischer/storm-scheduler/tree/master/stools-core/src/main/java/ch/uzh/ddis/stools/scheduler
+  * The python script that reads the communication graph from zookeeper, calls METIS, and writes the resulting schedule back into zookeeper: https://github.com/lorenzfischer/storm-scheduler/blob/master/stools-core/src/dev/python/scheduler.py
 
 2. The evaluated topologies
   * Parallel-Topo: https://github.com/lorenzfischer/storm-scheduler/blob/master/stools-topos/src/main/java/ch/uzh/ddis/stools/topos/ParallelTopology.java
   * Payload-Topo: https://github.com/lorenzfischer/storm-scheduler/blob/master/stools-topos/src/main/java/ch/uzh/ddis/stools/topos/PayloadTopology.java
   * FixedRate-Topo (to test impact of acking facility): https://github.com/lorenzfischer/storm-scheduler/blob/master/stools-topos/src/main/java/ch/uzh/ddis/stools/topos/FixedRateTopology.java
 
-The following code is not part of this repo:
+The following code is not part of this repository:
 
-  * OpenGov-Topo: This topology can be found here: https://github.com/uzh/katts
+  * OpenGov-Topo: This topology can be found here: https://github.com/uzh/katts (however, without data files)
   * Reference-Topo: http://www.dis.uniroma1.it/~midlab/software/ storm-adaptive-schedulers.zip
   
