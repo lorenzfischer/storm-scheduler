@@ -20,6 +20,6 @@ The main parts of the code are:
 The following code is not part of this repository:
 
   * OpenGov-Topo: This topology can be found here: https://github.com/uzh/katts (however, without data files)
-  * Reference-Topo: http://www.dis.uniroma1.it/~midlab/software/ storm-adaptive-schedulers.zip
+  * Reference-Topo: http://www.dis.uniroma1.it/~midlab/software/storm-adaptive-schedulers.zip
   
 This repository lives at https://github.com/lorenzfischer/storm-scheduler (main) and  https://github.com/uzh/storm-scheduler (copy)
